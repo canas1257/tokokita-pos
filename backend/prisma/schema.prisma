@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CASHIER
+}
+
+enum OrderStatus {
+  COMPLETED
+  CANCELLED
+}
+
+enum StockMovementType {
+  IN
+  OUT
+}
+
+model User {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String          @db.VarChar(120)
+  email          String          @unique @db.VarChar(190)
+  passwordHash   String          @map("password_hash") @db.VarChar(255)
+  role           UserRole        @default(CASHIER)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  orders         Order[]
+  priceHistories PriceHistory[]
+  stockMovements StockMovement[]
+
+  @@map("users")
+}
+
+model Product {
+  id              String          @id @default(uuid()) @db.Uuid
+  barcode         String          @unique @db.VarChar(80)
+  name            String          @db.VarChar(180)
+  costPrice       Decimal         @map("cost_price") @db.Decimal(15, 2)
+  sellingPrice    Decimal         @map("selling_price") @db.Decimal(15, 2)
+  stock           Int             @default(0)
+  minStockAlert   Int             @default(5) @map("min_stock_alert")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  orderItems      OrderItem[]
+  priceHistories  PriceHistory[]
+  stockMovements  StockMovement[]
+
+  @@index([name])
+  @@map("products")
+}
+
+model Order {
+  id            String      @id @default(uuid()) @db.Uuid
+  invoiceNumber String      @unique @map("invoice_number") @db.VarChar(60)
+  totalAmount   Decimal     @map("total_amount") @db.Decimal(15, 2)
+  paidAmount    Decimal     @map("paid_amount") @db.Decimal(15, 2)
+  changeAmount  Decimal     @map("change_amount") @db.Decimal(15, 2)
+  cashierId     String      @map("cashier_id") @db.Uuid
+  status        OrderStatus @default(COMPLETED)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  cashier       User        @relation(fields: [cashierId], references: [id])
+  items         OrderItem[]
+
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  orderId   String  @map("order_id") @db.Uuid
+  productId String  @map("product_id") @db.Uuid
+  quantity  Int
+  unitPrice Decimal @map("unit_price") @db.Decimal(15, 2)
+  costPrice Decimal @map("cost_price") @db.Decimal(15, 2)
+  subtotal  Decimal @db.Decimal(15, 2)
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model PriceHistory {
+  id              String   @id @default(uuid()) @db.Uuid
+  productId       String   @map("product_id") @db.Uuid
+  oldSellingPrice Decimal  @map("old_selling_price") @db.Decimal(15, 2)
+  newSellingPrice Decimal  @map("new_selling_price") @db.Decimal(15, 2)
+  oldCostPrice    Decimal  @map("old_cost_price") @db.Decimal(15, 2)
+  newCostPrice    Decimal  @map("new_cost_price") @db.Decimal(15, 2)
+  changedBy       String   @map("changed_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  product         Product  @relation(fields: [productId], references: [id])
+  user            User     @relation(fields: [changedBy], references: [id])
+
+  @@index([productId, createdAt])
+  @@map("price_histories")
+}
+
+model StockMovement {
+  id        String            @id @default(uuid()) @db.Uuid
+  productId String            @map("product_id") @db.Uuid
+  type      StockMovementType
+  quantity  Int
+  notes     String?           @db.Text
+  userId    String            @map("user_id") @db.Uuid
+  createdAt DateTime          @default(now()) @map("created_at")
+  product   Product           @relation(fields: [productId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
+
+  @@index([productId, createdAt])
+  @@map("stock_movements")
+}
